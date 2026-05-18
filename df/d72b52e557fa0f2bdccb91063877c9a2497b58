@@ -1,0 +1,21 @@
+packages/coding-agent/src/config.ts
+  s_de2750f75ff7f6::t_e5f6036d0d16dc 29,77-80,137-145,148-156,212-216,231-234
+packages/coding-agent/src/core/package-manager.ts
+  s_de2750f75ff7f6::t_c48078db1257f5 1438-1441,1444,1449-1452,1710-1712,1726-1727,1731-1733
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.4.8",
+  "base_commit_sha": "dfd72b52e557fa0f2bdccb91063877c9a2497b58",
+  "prompts": {},
+  "sessions": {
+    "s_de2750f75ff7f6": {
+      "agent_id": {
+        "tool": "pi",
+        "id": "019e35eb-07c7-7353-bbc4-b6f1cb7e4cfa",
+        "model": "deepseek-v4-flash"
+      },
+      "human_author": "nakayama900 <49431394+nakayama900@users.noreply.github.com>"
+    }
+  }
+}
