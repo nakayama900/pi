@@ -1435,13 +1435,21 @@ export class DefaultPackageManager implements PackageManager {
 
 	private async getLatestNpmVersion(packageName: string): Promise<string> {
 		const npmCommand = this.getNpmCommand();
+		// aube's `view` rejects `--json` when a field is specified (mutually exclusive).
+		// It outputs the field value as plain text.
+		const packageManagerName = this.getPackageManagerName();
+		const useJson = packageManagerName === "aube" ? [] : ["--json"];
 		const stdout = await this.runCommandCapture(
 			npmCommand.command,
-			[...npmCommand.args, "view", packageName, "version", "--json"],
+			[...npmCommand.args, "view", packageName, "version", ...useJson],
 			{ cwd: this.cwd, timeoutMs: NETWORK_TIMEOUT_MS },
 		);
 		const raw = stdout.trim();
 		if (!raw) throw new Error("Empty response from npm view");
+		// aube returns plain text, npm returns JSON-quoted string
+		if (packageManagerName === "aube") {
+			return raw;
+		}
 		return JSON.parse(raw);
 	}
 
@@ -1699,7 +1707,9 @@ export class DefaultPackageManager implements PackageManager {
 		if (packageManagerName === "pnpm") {
 			return ["install", ...specs, "--prefix", installRoot, "--config.strict-dep-builds=false"];
 		}
-		return ["install", ...specs, "--prefix", installRoot];
+		// aube uses `add` for installing specific packages (install only resolves package.json)
+		const installVerb = packageManagerName === "aube" ? "add" : "install";
+		return [installVerb, ...specs, "--prefix", installRoot];
 	}
 
 	private async installNpm(source: NpmSource, scope: SourceScope, temporary: boolean): Promise<void> {
@@ -1713,11 +1723,14 @@ export class DefaultPackageManager implements PackageManager {
 		if (!existsSync(installRoot)) {
 			return;
 		}
-		if (this.getPackageManagerName() === "bun") {
+		const packageManagerName = this.getPackageManagerName();
+		if (packageManagerName === "bun") {
 			await this.runNpmCommand(["uninstall", source.name, "--cwd", installRoot]);
 			return;
 		}
-		await this.runNpmCommand(["uninstall", source.name, "--prefix", installRoot]);
+		// aube supports `remove` as the uninstall verb (uninstall is also supported as alias)
+		const uninstallVerb = packageManagerName === "aube" ? "remove" : "uninstall";
+		await this.runNpmCommand([uninstallVerb, source.name, "--prefix", installRoot]);
 	}
 
 	private async installGit(source: GitSource, scope: SourceScope): Promise<void> {

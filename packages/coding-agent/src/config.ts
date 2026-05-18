@@ -26,7 +26,7 @@ export const isBunRuntime = !!process.versions.bun;
 // Install Method Detection
 // =============================================================================
 
-export type InstallMethod = "bun-binary" | "npm" | "pnpm" | "yarn" | "bun" | "unknown";
+export type InstallMethod = "bun-binary" | "npm" | "pnpm" | "yarn" | "bun" | "aube" | "unknown";
 
 interface SelfUpdateCommandStep {
 	command: string;
@@ -73,6 +73,10 @@ export function detectInstallMethod(): InstallMethod {
 	}
 	if (isBunRuntime || resolvedPath.includes("/install/global/node_modules/")) {
 		return "bun";
+	}
+	// aube stores global packages under a "global-aube" directory
+	if (resolvedPath.includes("/global-aube/")) {
+		return "aube";
 	}
 	if (resolvedPath.includes("/npm/") || resolvedPath.includes("/node_modules/")) {
 		return "npm";
@@ -130,8 +134,26 @@ function getSelfUpdateCommandForMethod(
 					? undefined
 					: makeSelfUpdateCommandStep("bun", ["uninstall", "-g", installedPackageName]),
 			);
+		case "aube": {
+			const [command = "aube", ...aubeArgs] = npmCommand ?? [];
+			const installStep = makeSelfUpdateCommandStep(command, [...aubeArgs, "add", "-g", updatePackageName]);
+			const uninstallStep =
+				updatePackageName === installedPackageName
+					? undefined
+					: makeSelfUpdateCommandStep(command, [...aubeArgs, "remove", "-g", installedPackageName]);
+			return makeSelfUpdateCommand(installStep, uninstallStep);
+		}
 		case "npm": {
 			const [command = "npm", ...npmArgs] = npmCommand ?? [];
+			// If the configured command is aube, use aube's add/remove verbs for self-update
+			if (command === "aube") {
+				const installStep = makeSelfUpdateCommandStep(command, [...npmArgs, "add", "-g", updatePackageName]);
+				const uninstallStep =
+					updatePackageName === installedPackageName
+						? undefined
+						: makeSelfUpdateCommandStep(command, [...npmArgs, "remove", "-g", installedPackageName]);
+				return makeSelfUpdateCommand(installStep, uninstallStep);
+			}
 			const inferred = npmCommand?.length ? undefined : getInferredNpmInstall();
 			const prefixArgs = [...npmArgs, ...(inferred ? ["--prefix", inferred.prefix] : [])];
 			const installStep = makeSelfUpdateCommandStep(command, [...prefixArgs, "install", "-g", updatePackageName]);
@@ -187,6 +209,11 @@ function getGlobalPackageRoots(method: InstallMethod, _packageName: string, npmC
 				}
 				return roots;
 			}
+			// If the configured command is aube, use aube root -g for global root
+			if (configured && command === "aube") {
+				const root = readCommandOutput(command, [...npmArgs, "root", "-g"]);
+				return root ? [root, join(root, "node_modules")] : [];
+			}
 			const root = readCommandOutput(command, [...npmArgs, "root", "-g"], {
 				requireSuccess: configured,
 			});
@@ -200,6 +227,11 @@ function getGlobalPackageRoots(method: InstallMethod, _packageName: string, npmC
 		case "yarn": {
 			const dir = readCommandOutput("yarn", ["global", "dir"]);
 			return dir ? [dir, join(dir, "node_modules")] : [];
+		}
+		case "aube": {
+			const [command = "aube", ...aubeArgs] = npmCommand ?? [];
+			const root = readCommandOutput(command, [...aubeArgs, "root", "-g"]);
+			return root ? [root, join(root, "node_modules")] : [];
 		}
 		case "bun": {
 			const bunBin = readCommandOutput("bun", ["pm", "bin", "-g"]);
